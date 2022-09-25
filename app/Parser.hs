@@ -1,47 +1,67 @@
 module Parser (file) where
 
-import Ast (Ast (..))
+import Data.List (elemIndex)
+import Expr (Expr (..))
 import Relude
-import Text.Parsec (alphaNum, chainr1, eof, letter, oneOf, (<?>))
+import Text.Parsec (ParsecT, alphaNum, letter, oneOf, parserFail, (<?>))
 import Text.Parsec.Expr (Assoc (AssocLeft, AssocRight), Operator (Infix), OperatorTable, buildExpressionParser)
-import Text.Parsec.Text (Parser)
 import qualified Text.Parsec.Token as P
 
-file :: Parser Ast
-file = whiteSpace *> ast <* eof
+type NamingContext = [Text]
+type Parser = ParsecT Text () (Reader NamingContext)
 
-ast :: Parser Ast
-ast = buildExpressionParser table term <?> "expression"
+file :: Parser Expr
+file = whiteSpace *> expr
 
-term :: Parser Ast
+expr :: Parser Expr
+expr = buildExpressionParser table term <?> "expression"
+
+term :: Parser Expr
 term =
-    parens ast
-        <|> Type <$ reserved "Type"
-        <|> abstr "λ" Lam
-        <|> reserved "let" *> parens (Let <$> identifier <* symbol "≡" <*> ast)
-            `chainr1` pure (.) <* symbol "." <*> ast
-        <|> abstr "Π" Pi
-        <|> Var <$> identifier
+    parens expr
+        <|> typeTerm
+        <|> lamTerm
+        <|> piTerm
+        <|> letTerm
+        <|> varTerm
         <?> "simple expression"
-  where
-    abstr :: String -> Abs -> Parser Ast
-    abstr s f = symbol s *> abstrHead f `chainr1` pure (.) <* symbol "." <*> ast
 
-    abstrHead :: Abs -> Parser (Ast -> Ast)
-    abstrHead f = parens $ f <$> maybeIdentifier <* symbol ":" <*> ast
+typeTerm :: Parser Expr
+typeTerm = Type <$ reserved "Type"
 
-table :: OperatorTable Text () Identity Ast
+letTerm :: Parser Expr
+letTerm = do
+    i <- reserved "let" *> identifier <* symbol "≡"
+    Let i <$> expr <* symbol "." <*> local (i :) expr
+
+varTerm :: Parser Expr
+varTerm = do
+    ctx <- ask
+    n <- identifier
+    case elemIndex n ctx of
+        Nothing -> parserFail $ "Variable not in scope: " <> toString n
+        Just i -> pure $ Var n i
+
+lamTerm :: Parser Expr
+lamTerm = do
+    i <- reserved "λ" *> binding <* symbol ":"
+    Lam i <$> expr <* symbol "." <*> maybe id (local . (:)) i expr
+
+piTerm :: Parser Expr
+piTerm = do
+    i <- reserved "Π" *> binding <* symbol ":"
+    Pi i <$> expr <* symbol "." <*> maybe id (local . (:)) i expr
+
+table :: OperatorTable Text () (Reader NamingContext) Expr
 table =
     [ [binary "" App AssocLeft]
     , [binary "→" (Pi Nothing) AssocRight]
     ]
 
-binary :: String -> (a -> a -> a) -> Assoc -> Operator Text () Identity a
+binary :: String -> (a -> a -> a) -> Assoc -> Operator Text () (Reader NamingContext) a
 binary name fun = Infix $ reservedOp name $> fun
 
-type Abs = Maybe Text -> Ast -> Ast -> Ast
-
-lexer :: P.GenTokenParser Text u Identity
+lexer :: P.GenTokenParser Text u (Reader NamingContext)
 lexer = P.makeTokenParser language
 
 whiteSpace :: Parser ()
@@ -53,8 +73,8 @@ parens = P.parens lexer
 identifier :: Parser Text
 identifier = toText <$> P.identifier lexer
 
-maybeIdentifier :: Parser (Maybe Text)
-maybeIdentifier = (Nothing <$ symbol "_") <|> (Just <$> identifier)
+binding :: Parser (Maybe Text)
+binding = Nothing <$ symbol "_" <|> Just <$> identifier
 
 reserved :: String -> Parser ()
 reserved = P.reserved lexer
@@ -65,7 +85,7 @@ reservedOp = P.reservedOp lexer
 symbol :: String -> Parser String
 symbol = P.symbol lexer
 
-language :: P.GenLanguageDef Text st Identity
+language :: P.GenLanguageDef Text st (Reader NamingContext)
 language =
     P.LanguageDef
         { P.commentStart = "{-"

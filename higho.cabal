@@ -75,6 +75,7 @@ executable higho
     NoImplicitPrelude
     LambdaCase
     OverloadedStrings
+    TupleSections
 
   -- Other library packages from which modules are imported.
   build-depends:
