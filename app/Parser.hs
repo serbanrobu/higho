@@ -1,17 +1,17 @@
-module Parser (file) where
+module Parser (parse) where
 
 import Data.List (elemIndex)
 import Expr (Expr (..))
 import Relude
-import Text.Parsec (ParsecT, alphaNum, letter, oneOf, parserFail, (<?>))
+import Text.Parsec (ParseError, ParsecT, alphaNum, letter, oneOf, parserFail, runParserT, (<?>))
 import Text.Parsec.Expr (Assoc (AssocLeft, AssocRight), Operator (Infix), OperatorTable, buildExpressionParser)
 import qualified Text.Parsec.Token as P
 
 type NamingContext = [Text]
 type Parser = ParsecT Text () (Reader NamingContext)
 
-file :: Parser Expr
-file = whiteSpace *> expr
+parse :: Text -> Either ParseError Expr
+parse s = runReader (runParserT (whiteSpace >> expr) () "" s) []
 
 expr :: Parser Expr
 expr = buildExpressionParser table term <?> "expression"

@@ -1,10 +1,9 @@
 module Main (main) where
 
 import Control.Arrow (ArrowChoice (left))
-import Expr (Expr, reduce, typeCheck)
-import qualified Parser (file)
+import Expr (reduce, typeCheck)
+import Parser (parse)
 import Relude
-import Text.Parsec (ParseError, runParserT)
 
 source :: Text
 source =
@@ -42,9 +41,6 @@ source =
         , "-- Π A : Type. A → A"
         , "λ A : Type. λ a : A. a"
         ]
-
-parse :: Text -> Either ParseError Expr
-parse s = runReader (runParserT Parser.file () "" s) []
 
 main :: IO ()
 main = print $ do
