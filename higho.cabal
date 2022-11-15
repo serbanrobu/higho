@@ -66,6 +66,7 @@ executable higho
   other-modules:
     Expr
     Parser
+    Transpiler
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

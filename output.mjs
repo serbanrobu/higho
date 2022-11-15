@@ -1,0 +1,1 @@
+export default Pair => pair => fst => snd => A => B => p => pair(B)(A)(snd(A)(B)(p))(fst(A)(B)(p))

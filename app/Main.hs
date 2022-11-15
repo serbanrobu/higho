@@ -4,6 +4,7 @@ import Control.Arrow (ArrowChoice (left))
 import Expr (reduce, typeCheck)
 import Parser (parse)
 import Relude
+import Transpiler (Js (Js))
 
 source :: Text
 source =
@@ -19,14 +20,14 @@ source =
         , "-- . Π B : Type"
         , "-- . Pair A B → Pair B A"
         , ""
-        , "-- λ Pair : Type → Type → Type"
-        , "-- . λ pair : Π A : Type. Π B : Type. A → B → Pair A B"
-        , "-- . λ fst : Π A : Type. Π B : Type. Pair A B → A"
-        , "-- . λ snd : Π A : Type. Π B : Type. Pair A B → B"
-        , "-- . λ A : Type"
-        , "-- . λ B : Type"
-        , "-- . λ p : Pair A B"
-        , "-- . pair B A (snd A B p) (fst A B p)"
+        , "λ Pair : Type → Type → Type"
+        , ". λ pair : Π A : Type. Π B : Type. A → B → Pair A B"
+        , ". λ fst : Π A : Type. Π B : Type. Pair A B → A"
+        , ". λ snd : Π A : Type. Π B : Type. Pair A B → B"
+        , ". λ A : Type"
+        , ". λ B : Type"
+        , ". λ p : Pair A B"
+        , ". pair B A (snd A B p) (fst A B p)"
         , ""
         , "-- Π (Void : Type). let (Not ≡ λ (A : Type). A → Void). Π (P : Type) (Q : Type). (P → Q) → Not Q → Not P"
         , "-- λ Void : Type"
@@ -39,10 +40,16 @@ source =
         , "-- . nq (pq p)"
         , ""
         , "-- Π A : Type. A → A"
-        , "λ A : Type. λ a : A. a"
+        , "-- λ A : Type. λ a : A. a"
         ]
 
 main :: IO ()
-main = print $ do
+main = case run of
+    Left err -> print err
+    Right expr -> writeFile "output.mjs" $ "export default " <> show expr
+
+run :: Either Text Js
+run = do
     expr <- left show $ parse source
-    reduce <$> runReaderT (typeCheck expr) []
+    _ <- reduce <$> runReaderT (typeCheck expr) []
+    pure $ Js expr
